@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AGENT FACTORY — DASHBOARD</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/styles.css">
+<style>
+.dash-card{background:#050505;border:2px solid #111;margin-bottom:2px;overflow:hidden;transition:border-color .15s}
+.dash-card.expanded{border-color:#ff00ff;box-shadow:0 0 16px rgba(255,0,255,.1)}
+.dash-card-header{display:flex;align-items:center;gap:12px;padding:16px;cursor:pointer;transition:background .1s}
+.dash-card-header:hover{background:rgba(255,0,255,.03)}
+.dash-card-name{font-family:'Press Start 2P',monospace;font-size:9px;color:#ff00ff;text-shadow:0 0 8px #ff00ff;flex:1}
+.dash-card-ticker{font-family:'Press Start 2P',monospace;font-size:7px;color:#333}
+.status-badge{font-family:'Press Start 2P',monospace;font-size:6px;padding:4px 8px;border:1px solid}
+.status-badge.pending{color:#ffff00;border-color:#ffff00;box-shadow:0 0 6px rgba(255,255,0,.2)}
+.status-badge.deployed{color:#00ff00;border-color:#00ff00;box-shadow:0 0 6px rgba(0,255,0,.2)}
+.dash-card-body{display:none;padding:0 16px 20px;border-top:1px solid #0d0d0d}
+.dash-card.expanded .dash-card-body{display:block}
+.dash-section-head{font-family:'Press Start 2P',monospace;font-size:7px;color:#333;margin:20px 0 12px;letter-spacing:1px;padding-bottom:6px;border-bottom:1px solid #0d0d0d}
+.copy-val{font-family:'Press Start 2P',monospace;font-size:7px;color:#00ffff;text-shadow:0 0 6px #00ffff;cursor:pointer;word-break:break-all;line-height:2}
+.copy-val:hover{color:#fff}
+.dash-link{font-family:'Press Start 2P',monospace;font-size:6px;color:#444;text-decoration:none;padding:4px 8px;border:1px solid #1a1a1a;display:inline-block;margin-right:8px;margin-top:8px;transition:all .1s}
+.dash-link:hover{color:#00ffff;border-color:#00ffff;text-shadow:0 0 6px #00ffff}
+.trade-btns{display:flex;gap:10px;margin-top:8px}
+.feedback-line{font-family:'Press Start 2P',monospace;font-size:6px;margin-top:8px;min-height:16px;line-height:2}
+.manage-btn{font-family:'Press Start 2P',monospace;font-size:6px;padding:6px 12px;border:1px solid #1a1a1a;color:#333;background:none;cursor:pointer}
+.empty-state{font-family:'Press Start 2P',monospace;font-size:8px;color:#333;text-align:center;padding:60px 0;line-height:2.5}
+.empty-state a{color:#ff00ff;text-decoration:none}
+.empty-state a:hover{text-shadow:0 0 8px #ff00ff}
+</style>
+</head>
+<body>
+
+<canvas id="c"></canvas>
+
+<div class="wrap">
+
+  <nav>
+    <span class="logo">AGENT FACTORY</span>
+    <a href="/" class="nav-link">HOME</a>
+    <a href="/dashboard" class="nav-link nav-active">DASHBOARD</a>
+    <a href="/#agents" class="nav-link">AGENTS</a>
+    <a href="/#deploy" class="nav-link">DEPLOY</a>
+  </nav>
+
+  <div class="statusbar">
+    <div class="sb-item"><div class="sb-dot"></div><span class="sb-label">STATUS</span><span class="sb-val">ONLINE</span></div>
+    <div class="sb-item"><span class="sb-label">WALLET</span><span class="sb-val" id="sbWallet">NOT CONNECTED</span></div>
+    <div class="sb-item"><span class="sb-label">NETWORK</span><span class="sb-val">SOLANA</span></div>
+    <div class="sb-item"><span class="sb-label">MY AGENTS</span><span class="sb-val" id="sbCount">—</span></div>
+  </div>
+
+  <!-- CONNECT PROMPT -->
+  <div id="connectPrompt" class="section" style="text-align:center;padding:80px 0">
+    <div class="sec-head" style="justify-content:center">CONNECT WALLET TO VIEW YOUR AGENTS</div>
+    <div style="margin-top:32px">
+      <button class="px-btn" onclick="initWallet()">CONNECT PHANTOM</button>
+    </div>
+  </div>
+
+  <!-- DASHBOARD MAIN (hidden until wallet connected) -->
+  <div id="dashMain" style="display:none">
+
+    <div class="hero" style="padding:24px 0 16px">
+      <span class="pixel-title pt1" style="font-size:14px">MY AGENTS</span>
+      <p class="hero-sub" style="margin-top:8px">MANAGE YOUR DEPLOYED AGENTS, SET UP X API KEYS, POST TWEETS, AND TRADE.</p>
+    </div>
+
+    <div class="px-div"></div>
+
+    <div class="section">
+      <div class="sec-head cyan">YOUR AGENTS</div>
+      <div id="agentList"></div>
+      <div id="noAgents" class="empty-state" style="display:none">
+        NO AGENTS FOUND FOR THIS WALLET.<br>
+        <a href="/#deploy">DEPLOY YOUR FIRST AGENT →</a>
+      </div>
+    </div>
+
+  </div>
+
+  <footer>
+    <a href="/">HOME</a>
+    <a href="/#deploy">DEPLOY</a>
+    <a href="#">DOCS</a>
+    <span class="footer-r">ALWAYS ON.</span>
+  </footer>
+
+</div>
+
+<script>
+// CANVAS PIXEL RAIN
+const canvas=document.getElementById('c'),ctx=canvas.getContext('2d');
+let W,H;
+function resize(){W=canvas.width=innerWidth;H=canvas.height=innerHeight}
+resize();window.addEventListener('resize',resize);
+const drops=Array.from({length:80},()=>({x:Math.random()*W,y:Math.random()*H,speed:Math.random()*1.5+.5,char:'',timer:0,color:['#ff00ff','#00ffff','#ffff00','#00ff00','#ff6600'][Math.floor(Math.random()*5)],opacity:Math.random()*.4+.05}));
+const chars='AGENTFACTORY01アイウエオカキクケコ∆∑∞';
+function drawCanvas(){
+  ctx.fillStyle='rgba(0,0,0,.04)';ctx.fillRect(0,0,W,H);
+  drops.forEach(d=>{
+    if(--d.timer<=0){d.char=chars[Math.floor(Math.random()*chars.length)];d.timer=Math.floor(Math.random()*8+4)}
+    ctx.font='12px "Press Start 2P",monospace';
+    ctx.fillStyle=d.color.replace(')',`,${d.opacity})`).replace('rgb','rgba');
+    ctx.fillText(d.char,d.x,d.y);d.y+=d.speed;
+    if(d.y>H){d.y=0;d.x=Math.random()*W}
+  });
+  requestAnimationFrame(drawCanvas);
+}
+drawCanvas();
+
+// GLITCH
+setInterval(()=>{const l=document.querySelector('.logo');l.style.filter='blur(2px) hue-rotate(90deg)';setTimeout(()=>l.style.filter='',100)},8000);
+
+// STATE
+let connectedWallet = null;
+let myAgents = [];
+const SPRITES = ['🔮','👁','🌀','🕳','⚡','🧠','🤖','💀','🎭','🔥'];
+
+// WALLET
+async function initWallet() {
+  const provider = window.phantom?.solana || window.solana;
+  if (!provider) { alert('NO SOLANA WALLET DETECTED.\n\nINSTALL PHANTOM FROM PHANTOM.APP'); return; }
+  try {
+    const resp = await provider.connect();
+    connectedWallet = resp.publicKey.toString();
+    onWalletConnected();
+  } catch (err) {
+    alert('WALLET CONNECTION FAILED: ' + err.message);
+  }
+}
+
+function onWalletConnected() {
+  document.getElementById('sbWallet').textContent = connectedWallet.slice(0,4) + '...' + connectedWallet.slice(-4);
+  document.getElementById('connectPrompt').style.display = 'none';
+  document.getElementById('dashMain').style.display = 'block';
+  loadAgents();
+}
+
+// AUTO-CONNECT
+window.addEventListener('load', async () => {
+  const provider = window.phantom?.solana || window.solana;
+  if (provider) {
+    try {
+      const resp = await provider.connect({ onlyIfTrusted: true });
+      connectedWallet = resp.publicKey.toString();
+      onWalletConnected();
+    } catch(e) { /* not previously authorized */ }
+  }
+});
+
+// LOAD AGENTS
+async function loadAgents() {
+  try {
+    const res = await fetch('/api/agents');
+    const all = await res.json();
+    myAgents = all.filter(a => a.walletAddress === connectedWallet);
+    document.getElementById('sbCount').textContent = myAgents.length;
+    if (myAgents.length === 0) {
+      document.getElementById('noAgents').style.display = 'block';
+      document.getElementById('agentList').innerHTML = '';
+    } else {
+      document.getElementById('noAgents').style.display = 'none';
+      renderAgents(myAgents);
+    }
+  } catch (err) {
+    console.error('Failed to load agents:', err);
+  }
+}
+
+// RENDER
+function renderAgents(agents) {
+  const list = document.getElementById('agentList');
+  list.innerHTML = '';
+  agents.forEach((a, idx) => {
+    const hasMint = !!a.mintAddress;
+    const hasKeys = a.twitterKeys && a.twitterKeys.apiKey;
+    const card = document.createElement('div');
+    card.className = 'dash-card';
+    card.id = 'card-' + a._id;
+    card.innerHTML = `
+      <div class="dash-card-header" onclick="toggleCard('${a._id}')">
+        <span class="ap-sprite">${SPRITES[idx % SPRITES.length]}</span>
+        <span class="dash-card-name">${esc(a.name).toUpperCase()}</span>
+        <span class="dash-card-ticker">$${esc(a.ticker).toUpperCase()} · SOLANA</span>
+        <span class="status-badge ${a.status}">${a.status.toUpperCase()}</span>
+        <span class="manage-btn">MANAGE ▼</span>
+      </div>
+      <div class="dash-card-body">
+
+        <div class="dash-section-head">AGENT INFO</div>
+        <div class="success-row"><span class="sr-label">NAME</span><span class="sr-val">${esc(a.name).toUpperCase()}</span></div>
+        <div class="success-row"><span class="sr-label">TICKER</span><span class="sr-val">$${esc(a.ticker).toUpperCase()}</span></div>
+        ${a.description ? `<div class="success-row"><span class="sr-label">DESC</span><span class="sr-val" style="font-size:6px;color:#444">${esc(a.description)}</span></div>` : ''}
+        ${a.personality ? `<div class="success-row"><span class="sr-label">PERSONALITY</span><span class="sr-val" style="font-size:6px;color:#444;text-align:right;max-width:60%">${esc(a.personality).slice(0,80)}${a.personality.length>80?'...':''}</span></div>` : ''}
+        <div class="success-row">
+          <span class="sr-label">FEATURES</span>
+          <span class="sr-val" style="font-size:6px;color:#333">
+            ${a.features?.autoTweet?'<span style="color:#00ff00">TWEET</span> ':''}
+            ${a.features?.autoReply?'<span style="color:#00ffff">REPLY</span> ':''}
+            ${a.features?.autoBuyback?'<span style="color:#ffff00">BUYBACK</span> ':''}
+            ${a.features?.wildMode?'<span style="color:#ff6600">WILD</span>':''}
+          </span>
+        </div>
+        <div class="success-row"><span class="sr-label">CREATED</span><span class="sr-val" style="font-size:6px;color:#333">${new Date(a.createdAt).toLocaleDateString()}</span></div>
+
+        ${hasMint ? `
+        <div class="dash-section-head">TOKEN</div>
+        <div class="success-row">
+          <span class="sr-label">MINT</span>
+          <span class="copy-val" onclick="copyText(this,'${a.mintAddress}')">${a.mintAddress.slice(0,6)}...${a.mintAddress.slice(-4)} ⊕</span>
+        </div>
+        <div class="success-row">
+          <span class="sr-label">TX</span>
+          <span class="copy-val" onclick="copyText(this,'${a.txSignature}')">${a.txSignature.slice(0,6)}...${a.txSignature.slice(-4)} ⊕</span>
+        </div>
+        <div>
+          <a class="dash-link" href="https://pump.fun/coin/${a.mintAddress}" target="_blank">⊕ PUMP.FUN</a>
+          <a class="dash-link" href="https://solscan.io/token/${a.mintAddress}" target="_blank">⊕ SOLSCAN</a>
+        </div>
+        ` : `
+        <div class="dash-section-head" style="color:#444">TOKEN</div>
+        <div style="font-family:'Press Start 2P',monospace;font-size:6px;color:#333;padding:8px 0">NOT YET DEPLOYED. <a href="/#deploy" style="color:#ff00ff;text-decoration:none">DEPLOY NOW →</a></div>
+        `}
+
+        <div class="dash-section-head">X / TWITTER API KEYS</div>
+        <div style="font-family:'Press Start 2P',monospace;font-size:6px;color:#222;margin-bottom:12px;line-height:2">ENTER YOUR X API KEYS TO ENABLE AUTO-TWEETING. GET KEYS AT <a href="https://developer.x.com" target="_blank" style="color:#00ffff;text-decoration:none">DEVELOPER.X.COM</a></div>
+        <div class="field-row" style="margin-bottom:12px">
+          <div class="field"><label class="f-label">API KEY</label><input class="f-input" type="password" id="tw-apiKey-${a._id}" placeholder="••••••••" value="${a.twitterKeys?.apiKey||''}"></div>
+          <div class="field"><label class="f-label">API SECRET</label><input class="f-input" type="password" id="tw-apiSecret-${a._id}" placeholder="••••••••" value="${a.twitterKeys?.apiSecret||''}"></div>
+        </div>
+        <div class="field-row" style="margin-bottom:12px">
+          <div class="field"><label class="f-label">ACCESS TOKEN</label><input class="f-input" type="password" id="tw-accessToken-${a._id}" placeholder="••••••••" value="${a.twitterKeys?.accessToken||''}"></div>
+          <div class="field"><label class="f-label">ACCESS SECRET</label><input class="f-input" type="password" id="tw-accessSecret-${a._id}" placeholder="••••••••" value="${a.twitterKeys?.accessSecret||''}"></div>
+        </div>
+        <button class="px-btn cyan" style="max-width:200px;padding:10px;font-size:7px" onclick="saveTwitterKeys('${a._id}')">SAVE X KEYS</button>
+        <div class="feedback-line" id="tw-feedback-${a._id}"></div>
+
+        ${hasMint ? `
+        <div class="dash-section-head">POST TWEET</div>
+        <div class="field">
+          <textarea class="f-textarea" id="tweet-text-${a._id}" placeholder="WHAT SHOULD YOUR AGENT SAY?" style="height:60px"></textarea>
+        </div>
+        <button class="px-btn" style="max-width:200px;padding:10px;font-size:7px" onclick="postTweet('${a._id}')">POST TWEET</button>
+        <div class="feedback-line" id="tweet-feedback-${a._id}"></div>
+
+        <div class="dash-section-head">TRADE</div>
+        <div class="trade-btns">
+          <button class="px-btn green" style="padding:10px;font-size:7px" onclick="doBuyback('${a._id}')">BUYBACK (0.01 SOL)</button>
+          <button class="px-btn ghost" style="padding:10px;font-size:7px;border-color:#444;color:#444" onclick="doBurn('${a._id}')">SELL 1000 TOKENS</button>
+        </div>
+        <div class="feedback-line" id="trade-feedback-${a._id}"></div>
+        ` : ''}
+
+      </div>
+    `;
+    list.appendChild(card);
+  });
+}
+
+// HELPERS
+function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+function toggleCard(id) {
+  const card = document.getElementById('card-' + id);
+  const wasExpanded = card.classList.contains('expanded');
+  document.querySelectorAll('.dash-card.expanded').forEach(c => c.classList.remove('expanded'));
+  if (!wasExpanded) card.classList.add('expanded');
+}
+
+function copyText(el, text) {
+  navigator.clipboard.writeText(text).catch(() => {});
+  const orig = el.textContent;
+  el.textContent = 'COPIED!';
+  el.style.color = '#00ff00';
+  setTimeout(() => { el.textContent = orig; el.style.color = ''; }, 1200);
+}
+
+// SAVE TWITTER KEYS
+async function saveTwitterKeys(agentId) {
+  const fb = document.getElementById('tw-feedback-' + agentId);
+  const body = {
+    apiKey: document.getElementById('tw-apiKey-' + agentId).value.trim(),
+    apiSecret: document.getElementById('tw-apiSecret-' + agentId).value.trim(),
+    accessToken: document.getElementById('tw-accessToken-' + agentId).value.trim(),
+    accessSecret: document.getElementById('tw-accessSecret-' + agentId).value.trim(),
+  };
+  if (!body.apiKey || !body.apiSecret || !body.accessToken || !body.accessSecret) {
+    fb.textContent = 'ALL FOUR FIELDS REQUIRED.'; fb.style.color = '#ff0000'; return;
+  }
+  try {
+    fb.textContent = 'SAVING...'; fb.style.color = '#444';
+    const res = await fetch('/api/agents/' + agentId + '/twitter', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    fb.textContent = 'SAVED.'; fb.style.color = '#00ff00'; fb.style.textShadow = '0 0 6px #00ff00';
+    setTimeout(() => { fb.textContent = ''; fb.style.color = ''; fb.style.textShadow = ''; }, 2000);
+  } catch (err) {
+    fb.textContent = 'ERROR: ' + err.message; fb.style.color = '#ff0000';
+  }
+}
+
+// POST TWEET
+async function postTweet(agentId) {
+  const fb = document.getElementById('tweet-feedback-' + agentId);
+  const text = document.getElementById('tweet-text-' + agentId).value.trim();
+  if (!text) { fb.textContent = 'ENTER TWEET TEXT.'; fb.style.color = '#ff0000'; return; }
+  try {
+    fb.textContent = 'POSTING...'; fb.style.color = '#444';
+    const res = await fetch('/api/tweet/' + agentId, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    fb.textContent = 'TWEETED! ID: ' + data.tweetId; fb.style.color = '#00ffff'; fb.style.textShadow = '0 0 6px #00ffff';
+    document.getElementById('tweet-text-' + agentId).value = '';
+  } catch (err) {
+    fb.textContent = 'ERROR: ' + err.message; fb.style.color = '#ff0000';
+  }
+}
+
+// BUYBACK
+async function doBuyback(agentId) {
+  const fb = document.getElementById('trade-feedback-' + agentId);
+  if (!connectedWallet) { fb.textContent = 'WALLET NOT CONNECTED.'; fb.style.color = '#ff0000'; return; }
+  try {
+    fb.textContent = 'BUILDING TX...'; fb.style.color = '#444';
+    const res = await fetch('/api/trade/buyback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agentId, walletPublicKey: connectedWallet, amountSol: 0.01 }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    const txBytes = Uint8Array.from(atob(data.transaction), c => c.charCodeAt(0));
+    const { VersionedTransaction } = await import('https://esm.sh/@solana/web3.js@1.98.0');
+    const transaction = VersionedTransaction.deserialize(txBytes);
+
+    fb.textContent = 'APPROVE IN WALLET...'; fb.style.color = '#ffff00';
+    const provider = window.phantom?.solana || window.solana;
+    const { signature } = await provider.signAndSendTransaction(transaction);
+
+    fb.textContent = 'DONE! TX: ' + signature.slice(0,8) + '...'; fb.style.color = '#00ff00'; fb.style.textShadow = '0 0 6px #00ff00';
+  } catch (err) {
+    fb.textContent = 'ERROR: ' + err.message; fb.style.color = '#ff0000';
+  }
+}
+
+// SELL / BURN
+async function doBurn(agentId) {
+  const fb = document.getElementById('trade-feedback-' + agentId);
+  if (!connectedWallet) { fb.textContent = 'WALLET NOT CONNECTED.'; fb.style.color = '#ff0000'; return; }
+  try {
+    fb.textContent = 'BUILDING TX...'; fb.style.color = '#444';
+    const res = await fetch('/api/trade/burn', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agentId, walletPublicKey: connectedWallet, amountTokens: 1000 }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    const txBytes = Uint8Array.from(atob(data.transaction), c => c.charCodeAt(0));
+    const { VersionedTransaction } = await import('https://esm.sh/@solana/web3.js@1.98.0');
+    const transaction = VersionedTransaction.deserialize(txBytes);
+
+    fb.textContent = 'APPROVE IN WALLET...'; fb.style.color = '#ffff00';
+    const provider = window.phantom?.solana || window.solana;
+    const { signature } = await provider.signAndSendTransaction(transaction);
+
+    fb.textContent = 'DONE! TX: ' + signature.slice(0,8) + '...'; fb.style.color = '#00ff00'; fb.style.textShadow = '0 0 6px #00ff00';
+  } catch (err) {
+    fb.textContent = 'ERROR: ' + err.message; fb.style.color = '#ff0000';
+  }
+}
+</script>
+</body>
+</html>
